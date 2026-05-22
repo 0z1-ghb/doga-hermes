@@ -10,11 +10,11 @@ DOGA (Doğa Turkish for "nature") adds scenario simulation, Monte Carlo reasonin
 
 ## Features
 
-- **Goal Detection** — Identifies whether the user needs Information, Understanding, or Action before responding
-- **Scenario Generation** — Prompts the LLM to enumerate and weigh multiple interpretations
-- **Monte Carlo Simulation** — Pure Python engine (10K–50K iterations) for quantitative probability analysis, using 0 LLM tokens
-- **Thinking Panel** — `<world_model>` reasoning blocks are extracted and displayed as a structured `[DOGA: Thinking Process]` panel before the final response
-- **Configurable Depth** — 5 levels (1 = lightweight goal check, 5 = full probabilistic reasoning with simulation tool guidance)
+- **Goal Detection**  Identifies whether the user needs Information, Understanding, or Action before responding
+- **Scenario Generation**  Prompts the LLM to enumerate and weigh multiple interpretations
+- **Monte Carlo Simulation**  Pure Python engine (10K–50K iterations) for quantitative probability analysis, using 0 LLM tokens
+- **Thinking Panel**  `<world_model>` reasoning blocks are extracted and displayed as a structured `[DOGA: Thinking Process]` panel before the final response
+- **Configurable Depth**  5 levels (1 = lightweight goal check, 5 = full probabilistic reasoning with simulation tool guidance)
 
 ---
 
@@ -78,9 +78,7 @@ Returns probability distribution, entropy, and uncertainty level.
 
 ## Roadmap
 
-- **Phase 1** — Memory integration (Mnemosyne / Honcho) for persisting reasoning patterns
-- **Phase 2** — Automatic depth selection based on query complexity
-- **Phase 3** — Recursive reasoning (nested scenario simulation)
+Soon
 
 ---
 
@@ -94,7 +92,7 @@ DOGA uses three Hermes plugin hooks:
 | `transform_llm_output` | Extract `<world_model>` blocks, format as thinking panel |
 | `post_tool_call` | Log `simulate` tool usage |
 
-No core Hermes files are modified — DOGA is a pure plugin.
+No core Hermes files are modified  DOGA is a pure plugin.
 
 ---
 
