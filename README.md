@@ -4,7 +4,7 @@
 
 **Probabilistic, goal-aware thinking layer for Hermes Agent.**
 
-DOGA (Doğa — Turkish for "nature") adds scenario simulation, Monte Carlo reasoning, and goal detection to LLM responses. It guides the model to think probabilistically before answering, without modifying core Hermes behavior.
+DOGA (Doğa Turkish for "nature") adds scenario simulation, Monte Carlo reasoning, and goal detection to LLM responses. It guides the model to think probabilistically before answering, without modifying core Hermes behavior.
 
 ---
 
