@@ -1,0 +1,83 @@
+"""Output formatter for the world model plugin.
+
+Transforms LLM responses containing ``<world_model>`` reasoning blocks
+into a clean mixed format: a simulation summary panel + the final answer.
+"""
+
+from __future__ import annotations
+
+import re
+from typing import Optional
+
+
+# Regex to find <world_model>...</world_model> blocks
+_WORLD_MODEL_RE = re.compile(
+    r"<world_model>\s*(.*?)\s*</world_model>",
+    re.DOTALL | re.IGNORECASE,
+)
+
+# Regex to find [world_model_guide]...[world_model_guide] blocks
+_GUIDE_RE = re.compile(
+    r"\[world_model_guide\].*?\[/world_model_guide\]",
+    re.DOTALL,
+)
+
+
+def _strip_guide_blocks(text: str) -> str:
+    """Remove injected guidance blocks from the output."""
+    return _GUIDE_RE.sub("", text).strip()
+
+
+def _extract_world_model(text: str) -> tuple[list[str], str]:
+    """Extract all <world_model> blocks, return (blocks, remaining_text)."""
+    blocks: list[str] = []
+    remaining = text
+
+    while True:
+        match = _WORLD_MODEL_RE.search(remaining)
+        if not match:
+            break
+        blocks.append(match.group(1).strip())
+        remaining = remaining[:match.start()] + remaining[match.end():]
+
+    return blocks, remaining.strip()
+
+
+def _format_simulation_panel(blocks: list[str]) -> str:
+    """Format world model blocks into a clean summary panel."""
+    if not blocks:
+        return ""
+
+    panel_lines = ["[DOGA: Thinking Process]"]
+    panel_lines.append("   " + "-" * 50)
+
+    for i, block in enumerate(blocks):
+        if i > 0:
+            panel_lines.append("   " + "." * 50)
+        for line in block.strip().split("\n"):
+            panel_lines.append(f"   {line}")
+
+    panel_lines.append("   " + "-" * 50)
+    return "\n".join(panel_lines)
+
+
+def format_response(response_text: str, show_simulation: bool = True) -> str:
+    """Main entry point for ``transform_llm_output``.
+
+    Strips the injected guide, extracts world model blocks, and formats
+    them as a summary panel above the final answer.
+    """
+    # First strip our injected guide markers
+    cleaned = _strip_guide_blocks(response_text)
+
+    # Extract world model reasoning blocks
+    blocks, final_answer = _extract_world_model(cleaned)
+
+    if not show_simulation or not blocks:
+        return final_answer
+
+    panel = _format_simulation_panel(blocks)
+    if not panel:
+        return final_answer
+
+    return f"{panel}\n\n[Response]\n{final_answer}"
