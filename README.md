@@ -18,6 +18,8 @@ DOGA (Doğa Turkish for "nature") adds scenario simulation, Monte Carlo reasonin
 - **Configurable Depth**  5 levels (1 = lightweight goal check, 5 = full probabilistic reasoning with simulation tool guidance)
 - **Memory Integration (optional)**  Remembers goal patterns across sessions via Mnemosyne (`pip install doga-hermes[memory]`)
 - **De Bono Thinking Hats**  Structured parallel reasoning through Six Thinking Hats lens — depth-aware (White, Black, Yellow, Green, Red), optional, enabled by default
+- **Recursive Reasoning**  `reason_deeper` tool for multi-level self-critique; each recursion level uses a different De Bono hat lens; hierarchical panel output
+- **Hard-Break Safety**  Automatic stop after 3 ignored `reason_deeper` calls prevents tool-loop starvation
 
 ---
 
@@ -71,6 +73,7 @@ doga:
 | `/doga hide` | Hide simulation panel |
 | `/doga memory on` | Enable goal memory (requires Mnemosyne) |
 | `/doga memory off` | Disable goal memory |
+| `/doga max_recursion <1-5>` | Max recursion depth for `reason_deeper` tool (default: 3) |
 
 ### Simulate Tool
 
@@ -89,7 +92,19 @@ A `simulate` tool is registered in the `doga` toolset for Monte Carlo analysis. 
 }
 ```
 
-Returns probability distribution, entropy, and uncertainty level.
+Returns probability distribution, entropy, and uncertainty level. Scenarios can include nested `children` for hierarchical sub-simulations.
+
+### Reason Deeper Tool
+
+A `reason_deeper` tool is registered for recursive self-critique. The LLM calls it after the initial `<world_model>` analysis to identify missed aspects:
+
+```json
+{
+  "focus": "black hat risk cascade"
+}
+```
+
+Each recursion level applies a different De Bono thinking lens. The tool returns a structured instruction for deeper analysis. After `max_recursion` depth is reached, DOGA returns a stop signal; if the LLM ignores it 3 times, a hard-break terminates the loop.
 
 ---
 
@@ -98,7 +113,7 @@ Returns probability distribution, entropy, and uncertainty level.
 - **Phase 1 (done)** — Optional Mnemosyne memory for goal pattern persistence
 - **Phase 2 (done)** — Automatic depth selection based on query complexity
 - **De Bono Hats (done)** — Six Thinking Hats structured reasoning, optional, depth-aware
-- **Phase 3** — Recursive reasoning with nested scenario simulation
+- **Phase 3 (done)** — Recursive reasoning with nested scenario simulation, `reason_deeper` tool
 
 ---
 
@@ -110,7 +125,7 @@ DOGA uses three Hermes plugin hooks:
 |------|---------|
 | `pre_llm_call` | Inject goal detection + scenario guidance into the prompt |
 | `transform_llm_output` | Extract `<world_model>` blocks, format as thinking panel |
-| `post_tool_call` | Log `simulate` tool usage |
+| `post_tool_call` | Log tool usage; track `reason_deeper` recursion depth and stack |
 
 No core Hermes files are modified  DOGA is a pure plugin.
 
