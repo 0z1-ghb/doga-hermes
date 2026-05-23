@@ -9,6 +9,8 @@ from __future__ import annotations
 import re
 from typing import Optional
 
+from . import de_bono_hats
+
 
 # Regex to find <world_model>...</world_model> blocks
 _WORLD_MODEL_RE = re.compile(
@@ -59,13 +61,16 @@ def _extract_world_model(text: str) -> tuple[list[str], str]:
     return blocks, remaining.strip()
 
 
-def _format_simulation_panel(blocks: list[str]) -> str:
+def _format_simulation_panel(blocks: list[str], active_hats: Optional[list[str]] = None) -> str:
     """Format world model blocks into a clean summary panel."""
     non_empty = [b for b in blocks if b.strip()]
     if not non_empty:
         return ""
 
-    panel_lines = ["[DOGA: Thinking Process]"]
+    header = "[DOGA: Thinking Process]"
+    if active_hats:
+        header += de_bono_hats.format_hats_header(active_hats)
+    panel_lines = [header]
     panel_lines.append("   " + "-" * 50)
 
     for i, block in enumerate(non_empty):
@@ -78,7 +83,11 @@ def _format_simulation_panel(blocks: list[str]) -> str:
     return "\n".join(panel_lines)
 
 
-def format_response(response_text: str, show_simulation: bool = True) -> str:
+def format_response(
+    response_text: str,
+    show_simulation: bool = True,
+    active_hats: Optional[list[str]] = None,
+) -> str:
     """Main entry point for ``transform_llm_output``.
 
     Strips the injected guide, extracts world model blocks, and formats
@@ -93,7 +102,7 @@ def format_response(response_text: str, show_simulation: bool = True) -> str:
     if not show_simulation or not blocks:
         return final_answer
 
-    panel = _format_simulation_panel(blocks)
+    panel = _format_simulation_panel(blocks, active_hats=active_hats)
     if not panel:
         return final_answer
 

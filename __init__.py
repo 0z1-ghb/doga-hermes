@@ -12,6 +12,7 @@ import logging
 import re
 from typing import Any, Dict, Optional
 
+from . import de_bono_hats
 from . import depth_selector
 from . import simulation_engine
 from . import thinking_prompt
@@ -40,8 +41,10 @@ class _PluginState:
         self.show_simulation: bool = True
         self.max_scenarios: int = 5
         self.memory_enabled: bool = True
+        self.de_bono_enabled: bool = True
         self._current_user_message: str = ""
         self._last_complexity: str = "medium"
+        self._active_hats: list[str] = []
 
     def to_dict(self) -> dict:
         mode = f"auto (complexity: {self._last_complexity})" if self.auto_depth else f"manual (depth: {self.depth})"
@@ -51,6 +54,7 @@ class _PluginState:
             "depth": self.depth,
             "show_simulation": self.show_simulation,
             "max_scenarios": self.max_scenarios,
+            "de_bono_hats": "enabled" if self.de_bono_enabled else "disabled",
             "memory": "enabled" if self.memory_enabled else "disabled",
             "mnemosyne": "available" if MNEMOSYNE_AVAILABLE else "not installed",
         }
@@ -81,6 +85,11 @@ def _on_pre_llm_call(
         _state._last_complexity = depth_selector.assess_complexity(user_message)
         _state.depth = depth_selector.complexity_to_depth(_state._last_complexity)
 
+    if _state.de_bono_enabled:
+        _state._active_hats = de_bono_hats.hats_for_depth(_state.depth)
+    else:
+        _state._active_hats = []
+
     past_patterns = None
     if MNEMOSYNE_AVAILABLE and _state.memory_enabled and user_message:
         try:
@@ -102,6 +111,7 @@ def _on_pre_llm_call(
         user_message,
         depth=_state.depth,
         past_patterns=past_patterns,
+        hats_enabled=_state.de_bono_enabled,
     )
     return {"context": guide}
 
@@ -135,6 +145,7 @@ def _on_transform_llm_output(
     formatted = output_formatter.format_response(
         response_text,
         show_simulation=_state.show_simulation,
+        active_hats=_state._active_hats,
     )
     return formatted if formatted != response_text else None
 
@@ -263,6 +274,8 @@ Subcommands:
   auto                 Automatic depth (default — decides low/medium/high per query)
   manual low|medium|high  Force a specific thinking level
   depth <1-5>          Set depth manually (switches to manual mode)
+  hats on              Enable De Bono Six Thinking Hats (default)
+  hats off             Disable De Bono parallel thinking lenses
   show                 Show simulation panel in responses
   hide                 Hide simulation panel (only final answer)
   memory on            Enable Mnemosyne goal memory (requires pip install mnemosyne-memory)
@@ -294,12 +307,14 @@ def _handle_doga(raw_args: str) -> Optional[str]:
             mode = f"auto (complexity: {_state._last_complexity})"
         else:
             mode = f"manual (depth: {_state.depth}/5)"
+        hat_status = "enabled" if _state.de_bono_enabled else "disabled"
         return (
             "DOGA status:\n"
             f"  Enabled: {_state.enabled}\n"
             f"  Mode: {mode}\n"
             f"  Show simulation: {_state.show_simulation}\n"
             f"  Max scenarios: {_state.max_scenarios}\n"
+            f"  De Bono hats: {hat_status}\n"
             f"  Memory: {_state.memory_enabled} ({mem_status})"
         )
 
@@ -338,6 +353,19 @@ def _handle_doga(raw_args: str) -> Optional[str]:
     if sub == "hide":
         _state.show_simulation = False
         return "DOGA simulation panel hidden. Only final answer will be shown."
+
+    if sub == "hats":
+        if len(argv) < 2:
+            return f"De Bono hats: {'enabled' if _state.de_bono_enabled else 'disabled'}\nUsage: /doga hats on|off"
+        h = argv[1].lower()
+        if h == "on":
+            _state.de_bono_enabled = True
+            return "De Bono parallel thinking hats enabled."
+        elif h == "off":
+            _state.de_bono_enabled = False
+            _state._active_hats = []
+            return "De Bono parallel thinking hats disabled."
+        return "Usage: /doga hats on|off"
 
     if sub == "memory":
         if len(argv) < 2:
@@ -378,5 +406,5 @@ def register(ctx) -> None:
         "doga",
         handler=_handle_doga,
         description="Control DOGA probabilistic thinking.",
-        args_hint="on|off|status|auto|manual low|medium|high|depth <1-5>|show|hide|memory on|off",
+        args_hint="on|off|status|auto|manual low|medium|high|depth <1-5>|hats on|off|show|hide|memory on|off",
     )

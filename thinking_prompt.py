@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import Optional
 
+from . import de_bono_hats
+
 # ---------------------------------------------------------------------------
 # Goal detection — the "why" before the "what"
 # ---------------------------------------------------------------------------
@@ -117,13 +119,18 @@ def build_goal_prompt(
     user_message: str,
     depth: int = 3,
     past_patterns: Optional[list] = None,
+    hats_enabled: bool = True,
 ) -> str:
     """Build a complete thinking guidance block for injection.
 
-    Optionally includes past goal patterns from memory.
+    Optionally includes past goal patterns from memory and De Bono
+    parallel thinking hats for structured reasoning.
     This is the main entry point called from ``pre_llm_call``.
     """
     prompt = build_prompt(depth)
+
+    if hats_enabled:
+        prompt += de_bono_hats.build_hat_guidance(depth)
 
     if past_patterns:
         lines = ["", "Previous patterns for similar queries:"]
