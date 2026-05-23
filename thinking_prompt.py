@@ -113,10 +113,22 @@ def build_prompt(depth: int = 3) -> str:
         return DEEP_PROMPT
 
 
-def build_goal_prompt(user_message: str, depth: int = 3) -> str:
+def build_goal_prompt(
+    user_message: str,
+    depth: int = 3,
+    past_patterns: Optional[list] = None,
+) -> str:
     """Build a complete thinking guidance block for injection.
 
+    Optionally includes past goal patterns from memory.
     This is the main entry point called from ``pre_llm_call``.
     """
     prompt = build_prompt(depth)
+
+    if past_patterns:
+        lines = ["", "Previous patterns for similar queries:"]
+        for p in past_patterns:
+            lines.append(f"- Goal: {p.get('goal_type', '?')} (used {p.get('count', 1)}x)")
+        prompt += "\n" + "\n".join(lines)
+
     return f"\n\n[world_model_guide]\n{prompt}\n[/world_model_guide]"

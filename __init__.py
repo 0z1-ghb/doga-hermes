@@ -17,6 +17,13 @@ from . import output_formatter
 
 logger = logging.getLogger(__name__)
 
+# Optional Mnemosyne memory backend
+try:
+    from mnemosyne import remember, recall
+    MNEMOSYNE_AVAILABLE = True
+except ImportError:
+    MNEMOSYNE_AVAILABLE = False
+
 # ---------------------------------------------------------------------------
 # Plugin state
 # ---------------------------------------------------------------------------
@@ -29,6 +36,8 @@ class _PluginState:
         self.depth: int = 3          # 1-5
         self.show_simulation: bool = True
         self.max_scenarios: int = 5
+        self.memory_enabled: bool = True
+        self._current_user_message: str = ""
 
     def to_dict(self) -> dict:
         return {
@@ -36,6 +45,8 @@ class _PluginState:
             "depth": self.depth,
             "show_simulation": self.show_simulation,
             "max_scenarios": self.max_scenarios,
+            "memory": "enabled" if self.memory_enabled else "disabled",
+            "mnemosyne": "available" if MNEMOSYNE_AVAILABLE else "not installed",
         }
 
 
@@ -58,7 +69,30 @@ def _on_pre_llm_call(
     if not _state.enabled:
         return None
 
-    guide = thinking_prompt.build_goal_prompt(user_message, depth=_state.depth)
+    _state._current_user_message = user_message
+
+    past_patterns = None
+    if MNEMOSYNE_AVAILABLE and _state.memory_enabled and user_message:
+        try:
+            results = recall(user_message, top_k=3)
+            if results:
+                seen = {}
+                for r in results:
+                    meta = getattr(r, "metadata", {}) or {}
+                    gt = meta.get("goal_type", "unknown")
+                    seen[gt] = seen.get(gt, 0) + 1
+                past_patterns = [
+                    {"goal_type": k, "count": v}
+                    for k, v in sorted(seen.items(), key=lambda x: -x[1])
+                ]
+        except Exception:
+            logger.debug("doga memory recall failed", exc_info=True)
+
+    guide = thinking_prompt.build_goal_prompt(
+        user_message,
+        depth=_state.depth,
+        past_patterns=past_patterns,
+    )
     return {"context": guide}
 
 
@@ -69,6 +103,25 @@ def _on_transform_llm_output(
     """Format the LLM output: simulation summary + final answer."""
     if not _state.enabled or not response_text:
         return None
+
+    # Save detected goal pattern to Mnemosyne if available
+    if MNEMOSYNE_AVAILABLE and _state.memory_enabled and _state._current_user_message:
+        try:
+            import re
+            m = re.search(
+                r"<world_model>.*?(Information|Understanding|Action)",
+                response_text,
+                re.DOTALL | re.IGNORECASE,
+            )
+            goal_type = m.group(1).lower() if m else "unknown"
+            remember(
+                content=_state._current_user_message,
+                importance=0.7,
+                source="doga_goal",
+                metadata={"goal_type": goal_type, "depth": _state.depth},
+            )
+        except Exception:
+            logger.debug("doga memory save failed", exc_info=True)
 
     formatted = output_formatter.format_response(
         response_text,
@@ -196,6 +249,8 @@ Subcommands:
   depth <1-5>     Set thinking depth (1=lightweight, 5=full simulation)
   show            Show simulation panel in responses
   hide            Hide simulation panel (only final answer)
+  memory on       Enable Mnemosyne goal memory (requires pip install mnemosyne-memory)
+  memory off      Disable Mnemosyne goal memory
 
 Current state: {state}
 """
@@ -218,12 +273,14 @@ def _handle_doga(raw_args: str) -> Optional[str]:
         return "DOGA thinking disabled."
 
     if sub == "status":
+        mem_status = "available" if MNEMOSYNE_AVAILABLE else "not installed"
         return (
             "DOGA status:\n"
             f"  Enabled: {_state.enabled}\n"
             f"  Depth: {_state.depth}/5\n"
             f"  Show simulation: {_state.show_simulation}\n"
-            f"  Max scenarios: {_state.max_scenarios}"
+            f"  Max scenarios: {_state.max_scenarios}\n"
+            f"  Memory: {_state.memory_enabled} ({mem_status})"
         )
 
     if sub == "depth":
@@ -245,6 +302,20 @@ def _handle_doga(raw_args: str) -> Optional[str]:
     if sub == "hide":
         _state.show_simulation = False
         return "DOGA simulation panel hidden. Only final answer will be shown."
+
+    if sub == "memory":
+        if len(argv) < 2:
+            return f"Memory: {'enabled' if _state.memory_enabled else 'disabled'} ({'available' if MNEMOSYNE_AVAILABLE else 'not installed'})\nUsage: /doga memory on|off"
+        m = argv[1].lower()
+        if m == "on":
+            if not MNEMOSYNE_AVAILABLE:
+                return "Mnemosyne is not installed. Run: pip install mnemosyne-memory"
+            _state.memory_enabled = True
+            return "DOGA goal memory enabled."
+        elif m == "off":
+            _state.memory_enabled = False
+            return "DOGA goal memory disabled."
+        return "Usage: /doga memory on|off"
 
     return f"Unknown subcommand: {sub}\n\n{_DOGA_HELP.format(state=_state.to_dict())}"
 
@@ -271,5 +342,5 @@ def register(ctx) -> None:
         "doga",
         handler=_handle_doga,
         description="Control DOGA probabilistic thinking.",
-        args_hint="on|off|status|depth <1-5>|show|hide",
+        args_hint="on|off|status|depth <1-5>|show|hide|memory on|off",
     )
