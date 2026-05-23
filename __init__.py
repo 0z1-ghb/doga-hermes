@@ -28,15 +28,12 @@ except ImportError:
     MNEMOSYNE_AVAILABLE = False
 
 # ---------------------------------------------------------------------------
-# PHASE 3 RESEARCH NOTE (2026-05-23)
+# PHASE 3 — Recursive Reasoning via Hermes tool-calling loop
 #
-# Recursive reasoning requires Hermes to support multi-turn internal LLM
-# calls (pre_llm_call invoked multiple times per user message). Current
-# hook-only architecture cannot self-loop. Next step: investigate Hermes'
-# internal chain-of-thought support — does it call pre_llm_call per
-# internal reasoning step? If yes, _PluginState._reasoning_stack can track
-# recursion depth. If no, Phase 3 needs a Hermes core change or a new
-# Hermes API (llm.generate). Either way, "pure plugin" constraint breaks.
+# Hermes' existing tool-calling loop (tool → execute → feed back → repeat)
+# enables recursive reasoning without core changes. reason_deeper tool
+# triggers the loop; handler tracks depth via _reasoning_stack.
+# max_iterations in Hermes prevents infinite loops.
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
@@ -54,9 +51,12 @@ class _PluginState:
         self.max_scenarios: int = 5
         self.memory_enabled: bool = True
         self.de_bono_enabled: bool = True
+        self.max_recursion: int = 3
         self._current_user_message: str = ""
         self._last_complexity: str = "medium"
         self._active_hats: list[str] = []
+        self._recursion_depth: int = 0
+        self._reasoning_stack: list[dict] = []
 
     def to_dict(self) -> dict:
         mode = f"auto (complexity: {self._last_complexity})" if self.auto_depth else f"manual (depth: {self.depth})"
@@ -67,6 +67,7 @@ class _PluginState:
             "show_simulation": self.show_simulation,
             "max_scenarios": self.max_scenarios,
             "de_bono_hats": "enabled" if self.de_bono_enabled else "disabled",
+            "max_recursion": self.max_recursion,
             "memory": "enabled" if self.memory_enabled else "disabled",
             "mnemosyne": "available" if MNEMOSYNE_AVAILABLE else "not installed",
         }
@@ -90,6 +91,10 @@ def _on_pre_llm_call(
     """
     if not _state.enabled:
         return None
+
+    # Reset recursion state for this turn
+    _state._recursion_depth = 0
+    _state._reasoning_stack = []
 
     _state._current_user_message = user_message
 
@@ -176,12 +181,24 @@ def _on_post_tool_call(
     result: Any = None,
     **_: Any,
 ) -> None:
-    """Track simulate tool usage for logging (observational)."""
+    """Track tool usage for logging and recursion state."""
     if tool_name == "simulate" and isinstance(result, str):
         logger.debug(
             "doga simulate tool called with args=%s, result_len=%d",
             args,
             len(result),
+        )
+    elif tool_name == "reason_deeper" and isinstance(args, dict):
+        _state._recursion_depth += 1
+        _state._reasoning_stack.append({
+            "level": _state._recursion_depth,
+            "focus": args.get("focus", ""),
+        })
+        logger.debug(
+            "doga reason_deeper called (level %d/%d, focus=%s)",
+            _state._recursion_depth,
+            _state.max_recursion,
+            args.get("focus", ""),
         )
 
 # ---------------------------------------------------------------------------
@@ -281,6 +298,80 @@ def _check_simulate_requirements() -> bool:
     return True
 
 # ---------------------------------------------------------------------------
+# Tool: reason_deeper (Phase 3 — recursive reasoning)
+# ---------------------------------------------------------------------------
+
+_REASON_DEEPER_SCHEMA = {
+    "name": "reason_deeper",
+    "description": (
+        "Recursively deepen your own reasoning. Call this after your initial "
+        "<world_model> analysis to critique and refine your thinking. "
+        "Each call asks you to examine what you missed, consider edge cases, "
+        "and produce a deeper analysis. Stop calling when analysis is thorough."
+    ),
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "focus": {
+                "type": "string",
+                "description": (
+                    "What specific aspect to dig deeper into. "
+                    "e.g., 'black hat risk cascade', 'yellow hat assumption', "
+                    "'green hat alternative we overlooked'"
+                ),
+            },
+        },
+        "required": ["focus"],
+    },
+}
+
+
+def _reason_deeper_handler(args: Any, **kwargs: Any) -> str:
+    """Handle reason_deeper tool call — triggers next recursion level."""
+    if not isinstance(args, dict):
+        try:
+            args = json.loads(args) if isinstance(args, str) else {}
+        except (json.JSONDecodeError, TypeError):
+            return json.dumps({"error": "Invalid tool arguments."})
+
+    focus = args.get("focus", "general")
+    current_level = _state._recursion_depth
+
+    if current_level >= _state.max_recursion:
+        return json.dumps({
+            "stop": True,
+            "message": (
+                f"Maximum recursion depth ({_state.max_recursion}) reached. "
+                "Produce your final synthesized answer now."
+            ),
+        })
+
+    next_level = current_level + 1
+    recursion_hats = de_bono_hats.hats_for_recursion_level(next_level)
+
+    hat_lines = "\n".join(f"  [{h.upper()}] {de_bono_hats._HAT_DEFS[h]}"
+                         for h in recursion_hats)
+
+    instruction = (
+        f"--- RECURSION LEVEL {next_level} ---\n"
+        f"Focus: {focus}\n\n"
+        "Critique your previous analysis. What did you miss?\n"
+        "Consider edge cases, hidden assumptions, and alternative interpretations.\n"
+        f"Use these parallel thinking lenses:\n"
+        f"{hat_lines}\n\n"
+        f"Produce a new <world_model> section for Level {next_level}.\n"
+        "When done, call `reason_deeper` again to go deeper, "
+        "or produce your final answer if the analysis is thorough."
+    )
+
+    return json.dumps({"continue": True, "instruction": instruction})
+
+
+def _check_reason_deeper_requirements() -> bool:
+    """reason_deeper has no special requirements."""
+    return True
+
+# ---------------------------------------------------------------------------
 # Slash commands
 # ---------------------------------------------------------------------------
 
@@ -296,6 +387,7 @@ Subcommands:
   depth <1-5>          Set depth manually (switches to manual mode)
   hats on              Enable De Bono Six Thinking Hats (default)
   hats off             Disable De Bono parallel thinking lenses
+  max_recursion <1-5>  Max recursion depth for reason_deeper tool (default: 3)
   show                 Show simulation panel in responses
   hide                 Hide simulation panel (only final answer)
   memory on            Enable Mnemosyne goal memory (requires pip install mnemosyne-memory)
@@ -335,6 +427,7 @@ def _handle_doga(raw_args: str) -> Optional[str]:
             f"  Show simulation: {_state.show_simulation}\n"
             f"  Max scenarios: {_state.max_scenarios}\n"
             f"  De Bono hats: {hat_status}\n"
+            f"  Max recursion: {_state.max_recursion}\n"
             f"  Memory: {_state.memory_enabled} ({mem_status})"
         )
 
@@ -387,6 +480,18 @@ def _handle_doga(raw_args: str) -> Optional[str]:
             return "De Bono parallel thinking hats disabled."
         return "Usage: /doga hats on|off"
 
+    if sub == "max_recursion":
+        if len(argv) < 2:
+            return f"Current max recursion: {_state.max_recursion}\nUsage: /doga max_recursion <1-5>"
+        try:
+            r = int(argv[1])
+            if r < 1 or r > 5:
+                return "Max recursion must be between 1 and 5."
+            _state.max_recursion = r
+            return f"DOGA max recursion set to {r}."
+        except ValueError:
+            return "Invalid number. Use /doga max_recursion <1-5>."
+
     if sub == "memory":
         if len(argv) < 2:
             return f"Memory: {'enabled' if _state.memory_enabled else 'disabled'} ({'available' if MNEMOSYNE_AVAILABLE else 'not installed'})\nUsage: /doga memory on|off"
@@ -422,9 +527,19 @@ def register(ctx) -> None:
         emoji="🎲",
     )
 
+    ctx.register_tool(
+        name="reason_deeper",
+        toolset="doga",
+        schema=_REASON_DEEPER_SCHEMA,
+        handler=_reason_deeper_handler,
+        check_fn=_check_reason_deeper_requirements,
+        description="Recursively deepen reasoning via self-critique.",
+        emoji="🔄",
+    )
+
     ctx.register_command(
         "doga",
         handler=_handle_doga,
         description="Control DOGA probabilistic thinking.",
-        args_hint="on|off|status|auto|manual low|medium|high|depth <1-5>|hats on|off|show|hide|memory on|off",
+        args_hint="on|off|status|auto|manual low|medium|high|depth <1-5>|hats on|off|max_recursion <1-5>|show|hide|memory on|off",
     )

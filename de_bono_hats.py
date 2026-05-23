@@ -20,6 +20,21 @@ _HATS_BY_DEPTH = {
     5: ["white", "black", "yellow", "green", "red"],
 }
 
+# Per-recursion-level hats — each level uses a different lens
+_RECURSION_HATS = {
+    1: ["white", "black", "yellow"],    # facts + risks + benefits
+    2: ["black", "green"],               # critique + alternatives
+    3: ["red", "green"],                  # intuition + creative pivot
+    4: ["black", "yellow"],               # deep trade-off analysis
+    5: ["white", "red"],                  # revisit facts with intuition
+}
+    1: ["white"],
+    2: ["white"],
+    3: ["white", "black", "yellow"],
+    4: ["white", "black", "yellow"],
+    5: ["white", "black", "yellow", "green", "red"],
+}
+
 
 def build_hat_guidance(depth: int) -> str:
     """Return hat-based thinking instructions for the given depth.
@@ -40,6 +55,11 @@ def build_hat_guidance(depth: int) -> str:
 def hats_for_depth(depth: int) -> list[str]:
     """Return the list of hat keys active at the given depth."""
     return list(_HATS_BY_DEPTH.get(depth, []))
+
+
+def hats_for_recursion_level(level: int) -> list[str]:
+    """Return the hat keys active at the given recursion level."""
+    return list(_RECURSION_HATS.get(level, ["white", "black"]))
 
 
 def format_hats_header(hat_keys: list[str]) -> str:

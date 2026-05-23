@@ -84,6 +84,31 @@ def _build_scenario(raw: Dict[str, Any]) -> _Scenario:
     )
 
 
+def _evaluate_scenario(sc: _Scenario, all_vars: Dict[str, bool]) -> bool:
+    """Check whether a scenario matches the current sampled variables."""
+    if not sc.raw_conditions:
+        if not sc.variables:
+            return True
+        scenario_vars = {k: v for k, v in all_vars.items() if k in sc.variables}
+        return bool(scenario_vars and all(scenario_vars.values()))
+    return all(fn(all_vars) for fn in sc.compiled_conditions)
+
+
+def _evaluate_children(sc: _Scenario, all_vars: Dict[str, bool], counts: Dict[str, int]) -> None:
+    """Recursively evaluate children conditional on parent match."""
+    for child in sc.children:
+        if _evaluate_scenario(child, all_vars):
+            counts[child.name] = counts.get(child.name, 0) + 1
+            _evaluate_children(child, all_vars, counts)
+
+
+def _collect_names(sc: _Scenario, names: set[str]) -> None:
+    """Recursively collect all scenario names into the set."""
+    for child in sc.children:
+        names.add(child.name)
+        _collect_names(child, names)
+
+
 # ---------------------------------------------------------------------------
 # Monte Carlo engine
 # ---------------------------------------------------------------------------
@@ -121,6 +146,13 @@ class MonteCarloEngine:
         counts: Dict[str, int] = {s.name: 0 for s in parsed}
         none_count = 0
 
+        # Collect all names including children for results
+        all_names: set[str] = set(counts.keys())
+        for sc in parsed:
+            _collect_names(sc, all_names)
+        for name in all_names:
+            counts.setdefault(name, 0)
+
         for _ in range(n_iterations):
             all_vars: Dict[str, bool] = {}
             for sc in parsed:
@@ -130,32 +162,23 @@ class MonteCarloEngine:
 
             matched = False
             for sc in parsed:
-                if not sc.raw_conditions:
-                    if not sc.variables:
-                        counts[sc.name] = counts.get(sc.name, 0) + 1
-                        matched = True
-                    else:
-                        scenario_vars = {k: v for k, v in all_vars.items() if k in sc.variables}
-                        if scenario_vars and all(scenario_vars.values()):
-                            counts[sc.name] = counts.get(sc.name, 0) + 1
-                            matched = True
-                else:
-                    ok = all(fn(all_vars) for fn in sc.compiled_conditions)
-                    if ok:
-                        counts[sc.name] = counts.get(sc.name, 0) + 1
-                        matched = True
+                if _evaluate_scenario(sc, all_vars):
+                    counts[sc.name] = counts.get(sc.name, 0) + 1
+                    matched = True
+                    # Also evaluate children conditional on parent match
+                    _evaluate_children(sc, all_vars, counts)
 
             if not matched:
                 none_count += 1
 
         total = n_iterations
         result_scenarios = []
-        for sc in parsed:
-            prob = counts.get(sc.name, 0) / total if total > 0 else 0.0
+        for name in sorted(all_names):
+            prob = counts.get(name, 0) / total if total > 0 else 0.0
             result_scenarios.append({
-                "name": sc.name,
+                "name": name,
                 "probability": round(prob, 4),
-                "samples": counts.get(sc.name, 0),
+                "samples": counts.get(name, 0),
             })
 
         none_prob = none_count / total if total > 0 else 0.0

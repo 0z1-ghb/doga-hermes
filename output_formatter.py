@@ -61,6 +61,21 @@ def _extract_world_model(text: str) -> tuple[list[str], str]:
     return blocks, remaining.strip()
 
 
+def _detect_level_blocks(blocks: list[str]) -> list[tuple[int, str]]:
+    """Tag each block with its recursion level (0 if unknown)."""
+    tagged: list[tuple[int, str]] = []
+    level = 0
+    for block in blocks:
+        # Look for explicit level markers
+        m = re.search(r"(?:Level|level|RECURSION LEVEL)\s*(\d+)", block)
+        if m:
+            level = int(m.group(1))
+        else:
+            level += 1  # sequential assumption
+        tagged.append((level, block))
+    return tagged
+
+
 def _format_simulation_panel(blocks: list[str], active_hats: Optional[list[str]] = None) -> str:
     """Format world model blocks into a clean summary panel."""
     non_empty = [b for b in blocks if b.strip()]
@@ -71,15 +86,28 @@ def _format_simulation_panel(blocks: list[str], active_hats: Optional[list[str]]
     if active_hats:
         header += de_bono_hats.format_hats_header(active_hats)
     panel_lines = [header]
-    panel_lines.append("   " + "-" * 50)
+    panel_lines.append("   " + "=" * 50)
 
-    for i, block in enumerate(non_empty):
-        if i > 0:
+    tagged = _detect_level_blocks(non_empty)
+    prev_level = 0
+
+    for level, block in tagged:
+        if level != prev_level and level > 1:
+            panel_lines.append("")
+            panel_lines.append(f"   ─── Level {level} ───")
+            panel_lines.append("")
+        elif prev_level > 0:
+            panel_lines.append("")
             panel_lines.append("   " + "." * 50)
+            panel_lines.append("")
+
         for line in block.strip().split("\n"):
             panel_lines.append(f"   {line}")
 
-    panel_lines.append("   " + "-" * 50)
+        prev_level = level
+
+    panel_lines.append("")
+    panel_lines.append("   " + "=" * 50)
     return "\n".join(panel_lines)
 
 

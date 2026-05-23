@@ -78,6 +78,17 @@ The tool returns probability distributions. Use these to support your reasoning.
 """
 
 # ---------------------------------------------------------------------------
+# Recursive reasoning guidance — how to use reason_deeper
+# ---------------------------------------------------------------------------
+
+REASON_DEEPER_GUIDANCE = """\
+You also have access to the `reason_deeper` tool for recursive self-critique.
+Call it after your initial <world_model> analysis to identify what you missed,
+challenge assumptions, and refine your reasoning. Specify a `focus` describing
+the aspect to dig deeper into (e.g. 'risk cascade', 'hidden assumptions').
+"""
+
+# ---------------------------------------------------------------------------
 # Depth levels
 # ---------------------------------------------------------------------------
 
@@ -89,6 +100,8 @@ MEDIUM_PROMPT = f"""\
 {GOAL_DETECTION_PROMPT}
 
 {SCENARIO_PROMPT_TEMPLATE}
+
+{REASON_DEEPER_GUIDANCE}
 """
 
 # Depth 5: full probabilistic reasoning
@@ -98,6 +111,8 @@ DEEP_PROMPT = f"""\
 {SCENARIO_PROMPT_TEMPLATE}
 
 {SIMULATION_TOOL_GUIDANCE}
+
+{REASON_DEEPER_GUIDANCE}
 """
 
 
