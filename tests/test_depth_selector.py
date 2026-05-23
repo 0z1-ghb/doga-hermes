@@ -47,6 +47,12 @@ def test_long_text_with_markers():
     assert ds.assess_complexity(text) == "high"
 
 
+def test_non_string_input():
+    assert ds.assess_complexity(123) == "low"
+    assert ds.assess_complexity(["a"]) == "low"
+    assert ds.assess_complexity({"key": "val"}) == "low"
+
+
 def test_complexity_to_depth():
     assert ds.complexity_to_depth("low") == 1
     assert ds.complexity_to_depth("medium") == 3

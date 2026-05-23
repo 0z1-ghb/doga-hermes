@@ -33,7 +33,7 @@ _MULTI_TOPIC_RE = re.compile(r"[,]|\b(ve|or|vs|ile|karşı)\b", re.IGNORECASE)
 
 def assess_complexity(user_message: str) -> str:
     """Return 'low', 'medium', or 'high' based on message analysis."""
-    if not user_message or not user_message.strip():
+    if not isinstance(user_message, str) or not user_message.strip():
         return "low"
 
     text = user_message.strip()
