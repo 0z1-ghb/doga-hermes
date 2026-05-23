@@ -28,12 +28,6 @@ _RECURSION_HATS = {
     4: ["black", "yellow"],               # deep trade-off analysis
     5: ["white", "red"],                  # revisit facts with intuition
 }
-    1: ["white"],
-    2: ["white"],
-    3: ["white", "black", "yellow"],
-    4: ["white", "black", "yellow"],
-    5: ["white", "black", "yellow", "green", "red"],
-}
 
 
 def build_hat_guidance(depth: int) -> str:

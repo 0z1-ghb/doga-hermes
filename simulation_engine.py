@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import math
 import random
+import threading
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
@@ -14,14 +15,22 @@ from typing import Any, Dict, List, Optional
 # ---------------------------------------------------------------------------
 
 class _ConditionCache:
-    """Cache compiled condition expressions."""
+    """Cache compiled condition expressions with bounded size and thread safety."""
+
+    _MAX_SIZE = 1024
 
     def __init__(self):
         self._cache: Dict[str, callable] = {}
+        self._lock = threading.Lock()
 
     def get(self, expr: str) -> callable:
-        if expr not in self._cache:
-            self._cache[expr] = self._compile(expr)
+        if expr in self._cache:
+            return self._cache[expr]
+        with self._lock:
+            if expr not in self._cache:
+                if len(self._cache) >= self._MAX_SIZE:
+                    self._cache.clear()
+                self._cache[expr] = self._compile(expr)
         return self._cache[expr]
 
     @staticmethod
@@ -94,12 +103,20 @@ def _evaluate_scenario(sc: _Scenario, all_vars: Dict[str, bool]) -> bool:
     return all(fn(all_vars) for fn in sc.compiled_conditions)
 
 
-def _evaluate_children(sc: _Scenario, all_vars: Dict[str, bool], counts: Dict[str, int]) -> None:
-    """Recursively evaluate children conditional on parent match."""
+def _evaluate_children(
+    sc: _Scenario,
+    inherited_vars: Dict[str, bool],
+    counts: Dict[str, int],
+    rng: random.Random,
+) -> None:
+    """Recursively evaluate children with scoped variable space."""
     for child in sc.children:
-        if _evaluate_scenario(child, all_vars):
+        scoped_vars = dict(inherited_vars)
+        for var, prob in child.variables.items():
+            scoped_vars[var] = rng.random() < prob
+        if _evaluate_scenario(child, scoped_vars):
             counts[child.name] = counts.get(child.name, 0) + 1
-            _evaluate_children(child, all_vars, counts)
+            _evaluate_children(child, scoped_vars, counts, rng)
 
 
 def _collect_names(sc: _Scenario, names: set[str]) -> None:
@@ -166,7 +183,7 @@ class MonteCarloEngine:
                     counts[sc.name] = counts.get(sc.name, 0) + 1
                     matched = True
                     # Also evaluate children conditional on parent match
-                    _evaluate_children(sc, all_vars, counts)
+                    _evaluate_children(sc, all_vars, counts, self._rng)
 
             if not matched:
                 none_count += 1

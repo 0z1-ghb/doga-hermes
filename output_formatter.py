@@ -25,8 +25,9 @@ _FALLBACK_WM_RE = re.compile(
 )
 
 # Regex to find [world_model_guide]...[world_model_guide] blocks
+# Fallback: matches unclosed tags too (token truncation safety)
 _GUIDE_RE = re.compile(
-    r"\[world_model_guide\].*?\[/world_model_guide\]",
+    r"\[world_model_guide\].*?(?:\[/world_model_guide\]|$)",
     re.DOTALL,
 )
 
@@ -55,7 +56,10 @@ def _extract_world_model(text: str) -> tuple[list[str], str]:
     if not blocks:
         match = _FALLBACK_WM_RE.search(remaining)
         if match and not match.group(0).rstrip().endswith("</world_model>"):
-            blocks.append(match.group(1).strip())
+            content = match.group(1).strip()
+            # Strip any nested raw <world_model> tags from truncated content
+            content = re.sub(r"<world_model>\s*", "", content, flags=re.IGNORECASE)
+            blocks.append(content)
             remaining = remaining[:match.start()] + remaining[match.end():]
 
     return blocks, remaining.strip()
@@ -67,7 +71,7 @@ def _detect_level_blocks(blocks: list[str]) -> list[tuple[int, str]]:
     level = 0
     for block in blocks:
         # Look for explicit level markers
-        m = re.search(r"(?:Level|level|RECURSION LEVEL)\s*(\d+)", block)
+        m = re.search(r"(?:Level|level|RECURSION LEVEL)\s*(\d+)", block, re.IGNORECASE)
         if m:
             level = int(m.group(1))
         else:

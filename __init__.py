@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import threading
 from typing import Any, Dict, Optional
 
 from . import de_bono_hats
@@ -41,7 +42,12 @@ except ImportError:
 # ---------------------------------------------------------------------------
 
 class _PluginState:
-    """Mutable plugin settings, adjustable via /doga slash command."""
+    """Mutable plugin settings, adjustable via /doga slash command.
+
+    Global settings (enabled, depth, etc.) are shared across sessions.
+    Per-turn state (_recursion_depth, etc.) is thread-local to prevent
+    cross-session contamination in concurrent conversation handling.
+    """
 
     def __init__(self):
         self.enabled: bool = True
@@ -52,11 +58,59 @@ class _PluginState:
         self.memory_enabled: bool = True
         self.de_bono_enabled: bool = True
         self.max_recursion: int = 3
-        self._current_user_message: str = ""
-        self._last_complexity: str = "medium"
-        self._active_hats: list[str] = []
-        self._recursion_depth: int = 0
-        self._reasoning_stack: list[dict] = []
+        self._local = threading.local()
+
+    @property
+    def _current_user_message(self) -> str:
+        return getattr(self._local, 'current_user_message', "")
+
+    @_current_user_message.setter
+    def _current_user_message(self, value: str):
+        self._local.current_user_message = value
+
+    @property
+    def _last_complexity(self) -> str:
+        return getattr(self._local, 'last_complexity', "medium")
+
+    @_last_complexity.setter
+    def _last_complexity(self, value: str):
+        self._local.last_complexity = value
+
+    @property
+    def _active_hats(self) -> list[str]:
+        if not hasattr(self._local, 'active_hats'):
+            self._local.active_hats = []
+        return self._local.active_hats
+
+    @_active_hats.setter
+    def _active_hats(self, value: list[str]):
+        self._local.active_hats = value
+
+    @property
+    def _recursion_depth(self) -> int:
+        return getattr(self._local, 'recursion_depth', 0)
+
+    @_recursion_depth.setter
+    def _recursion_depth(self, value: int):
+        self._local.recursion_depth = value
+
+    @property
+    def _reasoning_stack(self) -> list[dict]:
+        if not hasattr(self._local, 'reasoning_stack'):
+            self._local.reasoning_stack = []
+        return self._local.reasoning_stack
+
+    @_reasoning_stack.setter
+    def _reasoning_stack(self, value: list[dict]):
+        self._local.reasoning_stack = value
+
+    @property
+    def _stop_sent(self) -> bool:
+        return getattr(self._local, 'stop_sent', False)
+
+    @_stop_sent.setter
+    def _stop_sent(self, value: bool):
+        self._local.stop_sent = value
 
     def to_dict(self) -> dict:
         mode = f"auto (complexity: {self._last_complexity})" if self.auto_depth else f"manual (depth: {self.depth})"
@@ -95,6 +149,7 @@ def _on_pre_llm_call(
     # Reset recursion state for this turn
     _state._recursion_depth = 0
     _state._reasoning_stack = []
+    _state._stop_sent = False
 
     _state._current_user_message = user_message
 
@@ -337,7 +392,9 @@ def _reason_deeper_handler(args: Any, **kwargs: Any) -> str:
     focus = args.get("focus", "general")
     current_level = _state._recursion_depth
 
-    if current_level >= _state.max_recursion:
+    if current_level >= _state.max_recursion or _state._stop_sent:
+        _state._stop_sent = True
+        _state._reasoning_stack.clear()
         return json.dumps({
             "stop": True,
             "message": (
