@@ -112,6 +112,14 @@ class _PluginState:
     def _stop_sent(self, value: bool):
         self._local.stop_sent = value
 
+    @property
+    def _stop_count(self) -> int:
+        return getattr(self._local, 'stop_count', 0)
+
+    @_stop_count.setter
+    def _stop_count(self, value: int):
+        self._local.stop_count = value
+
     def to_dict(self) -> dict:
         mode = f"auto (complexity: {self._last_complexity})" if self.auto_depth else f"manual (depth: {self.depth})"
         return {
@@ -150,6 +158,7 @@ def _on_pre_llm_call(
     _state._recursion_depth = 0
     _state._reasoning_stack = []
     _state._stop_sent = False
+    _state._stop_count = 0
 
     _state._current_user_message = user_message
 
@@ -394,7 +403,17 @@ def _reason_deeper_handler(args: Any, **kwargs: Any) -> str:
 
     if current_level >= _state.max_recursion or _state._stop_sent:
         _state._stop_sent = True
+        _state._stop_count += 1
         _state._reasoning_stack.clear()
+        if _state._stop_count >= 3:
+            return json.dumps({
+                "stop": True,
+                "hard_break": True,
+                "message": (
+                    f"Maximum recursion depth ({_state.max_recursion}) reached. "
+                    "Produce your final synthesized answer now."
+                ),
+            })
         return json.dumps({
             "stop": True,
             "message": (

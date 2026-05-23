@@ -52,15 +52,15 @@ def _extract_world_model(text: str) -> tuple[list[str], str]:
         blocks.append(match.group(1).strip())
         remaining = remaining[:match.start()] + remaining[match.end():]
 
-    # Fallback: if no properly closed blocks, try unclosed <world_model> tags
+    # Fallback: if no properly closed blocks, try unclosed <world_model> tags.
+    # Do NOT swallow the content into blocks — strip the tag and leave content
+    # in remaining so the user still sees the response (no data loss).
     if not blocks:
         match = _FALLBACK_WM_RE.search(remaining)
         if match and not match.group(0).rstrip().endswith("</world_model>"):
             content = match.group(1).strip()
-            # Strip any nested raw <world_model> tags from truncated content
             content = re.sub(r"<world_model>\s*", "", content, flags=re.IGNORECASE)
-            blocks.append(content)
-            remaining = remaining[:match.start()] + remaining[match.end():]
+            remaining = (remaining[:match.start()] + content + remaining[match.end():]).strip()
 
     return blocks, remaining.strip()
 
