@@ -213,8 +213,13 @@ _SIMULATE_SCHEMA = {
 }
 
 
-def _simulate_tool_handler(args: Dict[str, Any], **kwargs: Any) -> str:
+def _simulate_tool_handler(args: Any, **kwargs: Any) -> str:
     """Handle the simulate tool call."""
+    if not isinstance(args, dict):
+        try:
+            args = json.loads(args) if isinstance(args, str) else {}
+        except (json.JSONDecodeError, TypeError):
+            return json.dumps({"error": "Invalid tool arguments: expected JSON object."})
     scenarios = args.get("scenarios", [])
     n_iterations = min(args.get("n_iterations", 10000), 50000)
 

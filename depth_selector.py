@@ -45,6 +45,9 @@ def assess_complexity(user_message: str) -> str:
     elif len(words) > 10:
         score += 1
 
+    if len(text) > 500:
+        score += 1
+
     for m in _UNCERTAINTY_MARKERS:
         if m in text.lower():
             score += 1

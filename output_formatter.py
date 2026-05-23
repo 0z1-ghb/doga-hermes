@@ -16,6 +16,12 @@ _WORLD_MODEL_RE = re.compile(
     re.DOTALL | re.IGNORECASE,
 )
 
+# Fallback: catch unclosed <world_model> tags (missing closing tag)
+_FALLBACK_WM_RE = re.compile(
+    r"<world_model>\s*(.*?)(?:</world_model>|$)",
+    re.DOTALL | re.IGNORECASE,
+)
+
 # Regex to find [world_model_guide]...[world_model_guide] blocks
 _GUIDE_RE = re.compile(
     r"\[world_model_guide\].*?\[/world_model_guide\]",
@@ -29,7 +35,10 @@ def _strip_guide_blocks(text: str) -> str:
 
 
 def _extract_world_model(text: str) -> tuple[list[str], str]:
-    """Extract all <world_model> blocks, return (blocks, remaining_text)."""
+    """Extract all <world_model> blocks, return (blocks, remaining_text).
+
+    Tries properly closed tags first; falls back to unclosed tags if none found.
+    """
     blocks: list[str] = []
     remaining = text
 
@@ -39,6 +48,13 @@ def _extract_world_model(text: str) -> tuple[list[str], str]:
             break
         blocks.append(match.group(1).strip())
         remaining = remaining[:match.start()] + remaining[match.end():]
+
+    # Fallback: if no properly closed blocks, try unclosed <world_model> tags
+    if not blocks:
+        match = _FALLBACK_WM_RE.search(remaining)
+        if match and not match.group(0).rstrip().endswith("</world_model>"):
+            blocks.append(match.group(1).strip())
+            remaining = remaining[:match.start()] + remaining[match.end():]
 
     return blocks, remaining.strip()
 

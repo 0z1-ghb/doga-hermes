@@ -2,10 +2,56 @@
 
 from __future__ import annotations
 
-import random
-import statistics
+import ast
+import functools
 import math
-from typing import Any, Dict, List, Optional, Tuple
+import random
+from typing import Any, Dict, List, Optional
+
+
+class _ConditionCache:
+    """Cache compiled condition expressions."""
+
+    def __init__(self):
+        self._cache: Dict[str, callable] = {}
+
+    def get(self, expr: str) -> callable:
+        if expr not in self._cache:
+            self._cache[expr] = self._compile(expr)
+        return self._cache[expr]
+
+    @staticmethod
+    def _compile(expr: str) -> callable:
+        """Compile a boolean expression into a callable once.
+
+        Uses AST whitelist approach instead of raw eval for safety.
+        """
+        allowed_types = {
+            ast.Expression, ast.BoolOp, ast.And, ast.Or,
+            ast.UnaryOp, ast.Not,
+            ast.Name, ast.Constant,
+            ast.Compare, ast.Eq, ast.NotEq, ast.Gt, ast.GtE, ast.Lt, ast.LtE,
+            ast.In, ast.NotIn,
+        }
+        try:
+            tree = ast.parse(expr, mode="eval")
+            if not all(isinstance(n, tuple(allowed_types)) for n in ast.walk(tree)):
+                return lambda _vars: False
+            code = compile(tree, "<doga_cond>", "eval")
+        except (SyntaxError, ValueError):
+            return lambda _vars: False
+
+        def _call(variables: Dict[str, bool]) -> bool:
+            safe = {k: v for k, v in variables.items() if k.isidentifier()}
+            try:
+                return bool(eval(code, {"__builtins__": {}}, safe))
+            except Exception:
+                return False
+
+        return _call
+
+
+_COND_CACHE = _ConditionCache()
 
 
 class MonteCarloEngine:
@@ -36,53 +82,48 @@ class MonteCarloEngine:
         if not scenarios:
             return {"scenarios": [], "summary": {"total_iterations": 0}}
 
-        # Normalise variable names so conditions can reference them
+        # Pre-compile condition expressions once
         parsed = []
         for sc in scenarios:
             name = sc.get("name", "unnamed")
             variables = dict(sc.get("variables", {}))
             conditions = list(sc.get("conditions", []))
-            parsed.append((name, variables, conditions))
+            compiled = [_COND_CACHE.get(c) for c in conditions]
+            parsed.append((name, variables, conditions, compiled))
 
         counts: Dict[str, int] = {p[0]: 0 for p in parsed}
         none_count = 0
 
         for _ in range(n_iterations):
-            # Sample all variables across all scenarios (union of var names)
             all_vars: Dict[str, bool] = {}
-            for _, variables, _ in parsed:
+            for _, variables, _, _ in parsed:
                 for var, prob in variables.items():
                     if var not in all_vars:
                         all_vars[var] = self._rng.random() < prob
 
-            # Check which scenario conditions match
             matched = False
-            for name, variables, conditions in parsed:
-                if not conditions:
-                    # No conditions: check if all variables are True
-                    scenario_vars = {k: v for k, v in all_vars.items() if k in variables}
-                    if scenario_vars and all(scenario_vars.values()):
+            for name, variables, _conditions, compiled in parsed:
+                if not _conditions:
+                    if not variables:
                         counts[name] = counts.get(name, 0) + 1
                         matched = True
-                else:
-                    # Evaluate Python expressions
-                    try:
-                        ok = all(
-                            self._eval_condition(cond, all_vars)
-                            for cond in conditions
-                        )
-                        if ok:
+                    else:
+                        scenario_vars = {k: v for k, v in all_vars.items() if k in variables}
+                        if scenario_vars and all(scenario_vars.values()):
                             counts[name] = counts.get(name, 0) + 1
                             matched = True
-                    except Exception:
-                        continue
+                else:
+                    ok = all(call(all_vars) for call in compiled)
+                    if ok:
+                        counts[name] = counts.get(name, 0) + 1
+                        matched = True
 
             if not matched:
                 none_count += 1
 
         total = n_iterations
         result_scenarios = []
-        for name, _, _ in parsed:
+        for name, _, _, _ in parsed:
             prob = counts.get(name, 0) / total if total > 0 else 0.0
             result_scenarios.append({
                 "name": name,
@@ -113,19 +154,6 @@ class MonteCarloEngine:
                 "uncertainty": "high" if entropy > 1.5 else ("medium" if entropy > 0.5 else "low"),
             },
         }
-
-    def _eval_condition(self, expr: str, variables: Dict[str, bool]) -> bool:
-        """Safely evaluate a boolean expression like ``imza_var and not baskı``."""
-        # Build a safe local namespace with only the known variables
-        safe_locals = {}
-        for k, v in variables.items():
-            # Only allow alphanumeric + underscore variable names
-            if k.isidentifier():
-                safe_locals[k] = v
-        try:
-            return bool(eval(expr, {"__builtins__": {}}, safe_locals))
-        except Exception:
-            return False
 
     def _compute_entropy(self, probabilities: List[float]) -> float:
         """Shannon entropy of a probability distribution."""
