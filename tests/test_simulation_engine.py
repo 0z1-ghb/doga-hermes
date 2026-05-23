@@ -24,6 +24,13 @@ def test_condition_cache_syntax_error():
     assert not c.get("x and ")({})
 
 
+def test_condition_cache_recursion_error():
+    c = eng._ConditionCache()
+    deep = "(" * 5000 + "1" + ")" * 5000
+    fn = c.get(deep)
+    assert not fn({})
+
+
 def test_condition_cache_safe_ast():
     c = eng._ConditionCache()
     assert c.get("x == True")({"x": True})

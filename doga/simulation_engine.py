@@ -50,7 +50,7 @@ class _ConditionCache:
             if not all(isinstance(n, tuple(allowed_types)) for n in ast.walk(tree)):
                 return lambda _vars: False
             code = compile(tree, "<doga_cond>", "eval")
-        except (SyntaxError, ValueError):
+        except (SyntaxError, ValueError, RecursionError):
             return lambda _vars: False
 
         def _call(variables: Dict[str, bool]) -> bool:
