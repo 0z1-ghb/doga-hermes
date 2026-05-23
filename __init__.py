@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Any, Dict, Optional
 
 from . import depth_selector
@@ -116,7 +117,6 @@ def _on_transform_llm_output(
     # Save detected goal pattern to Mnemosyne if available
     if MNEMOSYNE_AVAILABLE and _state.memory_enabled and _state._current_user_message:
         try:
-            import re
             m = re.search(
                 r"<world_model>.*?(Information|Understanding|Action)",
                 response_text,
@@ -262,6 +262,7 @@ Subcommands:
   status               Show current settings
   auto                 Automatic depth (default — decides low/medium/high per query)
   manual low|medium|high  Force a specific thinking level
+  depth <1-5>          Set depth manually (switches to manual mode)
   show                 Show simulation panel in responses
   hide                 Hide simulation panel (only final answer)
   memory on            Enable Mnemosyne goal memory (requires pip install mnemosyne-memory)

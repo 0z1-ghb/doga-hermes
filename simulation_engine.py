@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import ast
-import functools
 import math
 import random
+from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+
+# ---------------------------------------------------------------------------
+# Condition cache — compile-once safe expression evaluator
+# ---------------------------------------------------------------------------
 
 class _ConditionCache:
     """Cache compiled condition expressions."""
@@ -54,6 +58,36 @@ class _ConditionCache:
 _COND_CACHE = _ConditionCache()
 
 
+# ---------------------------------------------------------------------------
+# Scenario data structure — flat for Phase 2, children ready for Phase 3
+# ---------------------------------------------------------------------------
+
+@dataclass
+class _Scenario:
+    """Internal representation of a single scenario for simulation."""
+
+    name: str
+    variables: Dict[str, float] = field(default_factory=dict)
+    raw_conditions: List[str] = field(default_factory=list, repr=False)
+    compiled_conditions: List[callable] = field(default_factory=list, repr=False, compare=False)
+    children: List[_Scenario] = field(default_factory=list, repr=False, compare=False)
+
+
+def _build_scenario(raw: Dict[str, Any]) -> _Scenario:
+    """Convert a raw dict from the LLM into a _Scenario."""
+    return _Scenario(
+        name=raw.get("name", "unnamed"),
+        variables=dict(raw.get("variables", {})),
+        raw_conditions=list(raw.get("conditions", [])),
+        compiled_conditions=[_COND_CACHE.get(c) for c in raw.get("conditions", [])],
+        children=[_build_scenario(ch) for ch in raw.get("children", [])],
+    )
+
+
+# ---------------------------------------------------------------------------
+# Monte Carlo engine
+# ---------------------------------------------------------------------------
+
 class MonteCarloEngine:
     """Lightweight Monte Carlo simulator.
 
@@ -76,46 +110,39 @@ class MonteCarloEngine:
           - ``variables``: dict[str, float] — variable name → P(true) in [0,1]
           - ``conditions``: list[str] (optional) — Python expressions like
             ``"imza_var and not baskı"`` that must be True for this scenario.
+          - ``children``: list[dict] (optional, Phase 3) — nested sub-scenarios.
 
         Returns ``{"scenarios": [...], "summary": {...}}``.
         """
         if not scenarios:
             return {"scenarios": [], "summary": {"total_iterations": 0}}
 
-        # Pre-compile condition expressions once
-        parsed = []
-        for sc in scenarios:
-            name = sc.get("name", "unnamed")
-            variables = dict(sc.get("variables", {}))
-            conditions = list(sc.get("conditions", []))
-            compiled = [_COND_CACHE.get(c) for c in conditions]
-            parsed.append((name, variables, conditions, compiled))
-
-        counts: Dict[str, int] = {p[0]: 0 for p in parsed}
+        parsed = [_build_scenario(sc) for sc in scenarios]
+        counts: Dict[str, int] = {s.name: 0 for s in parsed}
         none_count = 0
 
         for _ in range(n_iterations):
             all_vars: Dict[str, bool] = {}
-            for _, variables, _, _ in parsed:
-                for var, prob in variables.items():
+            for sc in parsed:
+                for var, prob in sc.variables.items():
                     if var not in all_vars:
                         all_vars[var] = self._rng.random() < prob
 
             matched = False
-            for name, variables, _conditions, compiled in parsed:
-                if not _conditions:
-                    if not variables:
-                        counts[name] = counts.get(name, 0) + 1
+            for sc in parsed:
+                if not sc.raw_conditions:
+                    if not sc.variables:
+                        counts[sc.name] = counts.get(sc.name, 0) + 1
                         matched = True
                     else:
-                        scenario_vars = {k: v for k, v in all_vars.items() if k in variables}
+                        scenario_vars = {k: v for k, v in all_vars.items() if k in sc.variables}
                         if scenario_vars and all(scenario_vars.values()):
-                            counts[name] = counts.get(name, 0) + 1
+                            counts[sc.name] = counts.get(sc.name, 0) + 1
                             matched = True
                 else:
-                    ok = all(call(all_vars) for call in compiled)
+                    ok = all(fn(all_vars) for fn in sc.compiled_conditions)
                     if ok:
-                        counts[name] = counts.get(name, 0) + 1
+                        counts[sc.name] = counts.get(sc.name, 0) + 1
                         matched = True
 
             if not matched:
@@ -123,12 +150,12 @@ class MonteCarloEngine:
 
         total = n_iterations
         result_scenarios = []
-        for name, _, _, _ in parsed:
-            prob = counts.get(name, 0) / total if total > 0 else 0.0
+        for sc in parsed:
+            prob = counts.get(sc.name, 0) / total if total > 0 else 0.0
             result_scenarios.append({
-                "name": name,
+                "name": sc.name,
                 "probability": round(prob, 4),
-                "samples": counts.get(name, 0),
+                "samples": counts.get(sc.name, 0),
             })
 
         none_prob = none_count / total if total > 0 else 0.0
@@ -156,7 +183,6 @@ class MonteCarloEngine:
         }
 
     def _compute_entropy(self, probabilities: List[float]) -> float:
-        """Shannon entropy of a probability distribution."""
         entropy = 0.0
         for p in probabilities:
             if p > 0:
@@ -165,10 +191,6 @@ class MonteCarloEngine:
 
     @staticmethod
     def estimate_from_description(description: str) -> List[Dict[str, Any]]:
-        """Simple heuristic to convert a text description to scenario variables.
-
-        This is a fallback for when the LLM doesn't provide structured data.
-        Returns a single generic scenario with equal probabilities."""
         return [
             {
                 "name": "base_case",
@@ -186,5 +208,4 @@ def run_scenarios(
     scenarios: List[Dict[str, Any]],
     n_iterations: int = 10000,
 ) -> Dict[str, Any]:
-    """Run Monte Carlo simulation (convenience wrapper)."""
     return _default_engine.simulate(scenarios, n_iterations=n_iterations)

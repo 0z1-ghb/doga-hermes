@@ -61,13 +61,14 @@ def _extract_world_model(text: str) -> tuple[list[str], str]:
 
 def _format_simulation_panel(blocks: list[str]) -> str:
     """Format world model blocks into a clean summary panel."""
-    if not blocks:
+    non_empty = [b for b in blocks if b.strip()]
+    if not non_empty:
         return ""
 
     panel_lines = ["[DOGA: Thinking Process]"]
     panel_lines.append("   " + "-" * 50)
 
-    for i, block in enumerate(blocks):
+    for i, block in enumerate(non_empty):
         if i > 0:
             panel_lines.append("   " + "." * 50)
         for line in block.strip().split("\n"):
