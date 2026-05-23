@@ -131,6 +131,12 @@ def format_response(
     # Extract world model reasoning blocks
     blocks, final_answer = _extract_world_model(cleaned)
 
+    # Strip any remaining raw <world_model> tags from final answer
+    # (catches mixed closed+unclosed tag scenarios)
+    final_answer = re.sub(
+        r"</?world_model>\s*", "", final_answer, flags=re.IGNORECASE
+    ).strip()
+
     if not show_simulation or not blocks:
         return final_answer
 
