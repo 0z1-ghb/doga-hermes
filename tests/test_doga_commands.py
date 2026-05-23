@@ -1,8 +1,10 @@
 """Tests for /doga slash commands."""
+import pytest
 import doga.__init__ as plugin
 
 
-def setup_method():
+@pytest.fixture(autouse=True)
+def _reset_state():
     plugin._state.enabled = True
     plugin._state.auto_depth = True
     plugin._state.depth = 3
@@ -166,4 +168,4 @@ def test_unknown():
 def test_status_with_memory_disabled():
     plugin._state.memory_enabled = False
     result = plugin._handle_doga("status")
-    assert "Memory: False" in result or "Memory: disabled" in result or "Memory: False" in result
+    assert "Memory: False" in result

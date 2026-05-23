@@ -68,6 +68,13 @@ def test_simulate_tool_handler_empty():
     assert "error" in data
 
 
+def test_simulate_tool_handler_stop_sent():
+    plugin._state._stop_sent = True
+    result = json.loads(plugin._simulate_tool_handler({"scenarios": [{"name": "t", "variables": {"x": 0.5}}]}))
+    assert result.get("stop") is True
+    plugin._state._stop_sent = False
+
+
 def test_simulate_tool_handler_success():
     result = plugin._simulate_tool_handler({
         "scenarios": [{"name": "t", "variables": {"x": 0.5}}],

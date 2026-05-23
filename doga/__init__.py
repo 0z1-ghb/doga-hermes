@@ -327,6 +327,8 @@ _SIMULATE_SCHEMA = {
 
 def _simulate_tool_handler(args: Any, **kwargs: Any) -> str:
     """Handle the simulate tool call."""
+    if _state._stop_sent:
+        return json.dumps({"stop": True, "message": "Recursion limit reached. Produce your final answer."})
     if not isinstance(args, dict):
         try:
             args = json.loads(args) if isinstance(args, str) else {}
