@@ -15,6 +15,7 @@ DOGA (Doğa Turkish for "nature") adds scenario simulation, Monte Carlo reasonin
 - **Monte Carlo Simulation**  Pure Python engine (10K–50K iterations) for quantitative probability analysis, using 0 LLM tokens
 - **Thinking Panel**  `<world_model>` reasoning blocks are extracted and displayed as a structured `[DOGA: Thinking Process]` panel before the final response
 - **Configurable Depth**  5 levels (1 = lightweight goal check, 5 = full probabilistic reasoning with simulation tool guidance)
+- **Memory Integration (optional)**  Remembers goal patterns across sessions via Mnemosyne (`pip install doga-hermes[memory]`)
 
 ---
 
@@ -25,6 +26,14 @@ Copy the `doga/` directory into your Hermes plugins folder:
 ```bash
 cp -r doga ~/.hermes/plugins/doga
 ```
+
+For goal memory persistence across sessions (optional):
+
+```bash
+pip install doga-hermes[memory]
+```
+
+No config changes needed — DOGA auto-detects Mnemosyne at runtime.
 
 Then enable it in `~/.hermes/config.yaml`:
 
@@ -54,6 +63,8 @@ doga:
 | `/doga depth <1-5>` | Set thinking depth |
 | `/doga show` | Show simulation panel |
 | `/doga hide` | Hide simulation panel |
+| `/doga memory on` | Enable goal memory (requires Mnemosyne) |
+| `/doga memory off` | Disable goal memory |
 
 ### Simulate Tool
 
@@ -78,7 +89,9 @@ Returns probability distribution, entropy, and uncertainty level.
 
 ## Roadmap
 
-Soon
+- **Phase 1 (done)** — Optional Mnemosyne memory for goal pattern persistence
+- **Phase 2** — Automatic depth selection based on query complexity
+- **Phase 3** — Recursive reasoning with nested scenario simulation
 
 ---
 
