@@ -1,5 +1,11 @@
 # DOGA
 
+[![MIT License](https://img.shields.io/github/license/0z1-ghb/doga-hermes)](https://github.com/0z1-ghb/doga-hermes/blob/main/LICENSE)
+[![Python 3.10 | 3.11 | 3.12](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](https://github.com/0z1-ghb/doga-hermes)
+[![CI](https://img.shields.io/github/actions/workflow/status/0z1-ghb/doga-hermes/test.yml)](https://github.com/0z1-ghb/doga-hermes/actions)
+[![Last Commit](https://img.shields.io/github/last-commit/0z1-ghb/doga-hermes)](https://github.com/0z1-ghb/doga-hermes)
+[![Release](https://img.shields.io/github/v/release/0z1-ghb/doga-hermes)](https://github.com/0z1-ghb/doga-hermes/releases)
+
 ![DOGA](assets/DOGA.png)
 
 **Probabilistic, goal-aware thinking layer for Hermes Agent.**
