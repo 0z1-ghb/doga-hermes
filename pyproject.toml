@@ -4,7 +4,7 @@ build-backend = "setuptools.backends._legacy:_Backend"
 
 [project]
 name = "doga-hermes"
-version = "1.0.0"
+version = "1.1.0"
 description = "Probabilistic, goal-aware thinking layer for Hermes Agent"
 readme = "README.md"
 license = { text = "MIT" }

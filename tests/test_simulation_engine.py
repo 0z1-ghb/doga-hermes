@@ -158,3 +158,18 @@ def test_run_scenarios_module():
     ], n_iterations=100)
     assert "summary" in result
     assert result["summary"]["total_iterations"] == 100
+
+
+def test_estimate_from_description():
+    result = eng.MonteCarloEngine.estimate_from_description("test query")
+    assert isinstance(result, list)
+    assert len(result) == 1
+    assert result[0]["name"] == "base_case"
+    assert "likelihood" in result[0]["variables"]
+
+
+def test_run_scenarios_thread_safety():
+    """Each call should produce the same result (fresh engine, same seed)."""
+    r1 = eng.run_scenarios([{"name": "t", "variables": {"x": 0.5}}], n_iterations=1000)
+    r2 = eng.run_scenarios([{"name": "t", "variables": {"x": 0.5}}], n_iterations=1000)
+    assert r1["scenarios"] == r2["scenarios"]

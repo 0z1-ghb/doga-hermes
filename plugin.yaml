@@ -1,8 +1,14 @@
 name: doga
-version: 1.0.0
-description: "DOGA — probabilistic, goal-aware thinking for Hermes Agent. Adds scenario simulation, Monte Carlo reasoning, and goal detection to agent responses."
+version: "1.1.0"
+description: "Probabilistic, goal-aware thinking layer for Hermes Agent"
 author: "0z1-ghb"
+license: MIT
+homepage: "https://github.com/0z1-ghb/doga-hermes"
 hooks:
   - pre_llm_call
   - transform_llm_output
   - post_tool_call
+toolsets:
+  - doga
+commands:
+  - doga

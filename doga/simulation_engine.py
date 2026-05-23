@@ -24,14 +24,13 @@ class _ConditionCache:
         self._lock = threading.Lock()
 
     def get(self, expr: str) -> callable:
-        if expr in self._cache:
-            return self._cache[expr]
         with self._lock:
-            if expr not in self._cache:
-                if len(self._cache) >= self._MAX_SIZE:
-                    self._cache.clear()
-                self._cache[expr] = self._compile(expr)
-        return self._cache[expr]
+            if expr in self._cache:
+                return self._cache[expr]
+            if len(self._cache) >= self._MAX_SIZE:
+                self._cache.clear()
+            self._cache[expr] = self._compile(expr)
+            return self._cache[expr]
 
     @staticmethod
     def _compile(expr: str) -> callable:
@@ -240,12 +239,13 @@ class MonteCarloEngine:
         ]
 
 
-# Module-level convenience
-_default_engine = MonteCarloEngine(seed=42)
+# Module-level convenience — each call creates a fresh engine
+# to guarantee thread safety (no shared RNG state)
 
 
 def run_scenarios(
     scenarios: List[Dict[str, Any]],
     n_iterations: int = 10000,
 ) -> Dict[str, Any]:
-    return _default_engine.simulate(scenarios, n_iterations=n_iterations)
+    engine = MonteCarloEngine(seed=42)
+    return engine.simulate(scenarios, n_iterations=n_iterations)

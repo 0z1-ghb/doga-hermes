@@ -14,9 +14,9 @@ _HAT_ORDER = ["white", "black", "yellow", "green", "red"]
 
 _HATS_BY_DEPTH = {
     1: ["white"],
-    2: ["white"],
+    2: ["white", "black"],
     3: ["white", "black", "yellow"],
-    4: ["white", "black", "yellow"],
+    4: ["white", "black", "yellow", "green"],
     5: ["white", "black", "yellow", "green", "red"],
 }
 

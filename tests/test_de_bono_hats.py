@@ -5,8 +5,16 @@ def test_hats_for_depth_1():
     assert hats.hats_for_depth(1) == ["white"]
 
 
+def test_hats_for_depth_2():
+    assert hats.hats_for_depth(2) == ["white", "black"]
+
+
 def test_hats_for_depth_3():
     assert hats.hats_for_depth(3) == ["white", "black", "yellow"]
+
+
+def test_hats_for_depth_4():
+    assert hats.hats_for_depth(4) == ["white", "black", "yellow", "green"]
 
 
 def test_hats_for_depth_5():

@@ -112,3 +112,16 @@ def test_reason_deeper_handler_continue():
 def test_on_transform_llm_output_disabled():
     plugin._state.enabled = False
     assert plugin._on_transform_llm_output(response_text="test") is None
+
+
+def test_on_transform_llm_output_memory_save():
+    plugin._state.enabled = True
+    plugin._state.memory_enabled = True
+    plugin._state._current_user_message = "what is the risk"
+    with patch.object(plugin, "MNEMOSYNE_AVAILABLE", True), \
+         patch.object(plugin, "remember", create=True) as mock_remember:
+        result = plugin._on_transform_llm_output(
+            "<world_model>Information</world_model> answer"
+        )
+        mock_remember.assert_called_once()
+    plugin._state.memory_enabled = False
