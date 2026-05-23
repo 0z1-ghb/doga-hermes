@@ -14,6 +14,7 @@ DOGA (Doğa Turkish for "nature") adds scenario simulation, Monte Carlo reasonin
 - **Scenario Generation**  Prompts the LLM to enumerate and weigh multiple interpretations
 - **Monte Carlo Simulation**  Pure Python engine (10K–50K iterations) for quantitative probability analysis, using 0 LLM tokens
 - **Thinking Panel**  `<world_model>` reasoning blocks are extracted and displayed as a structured `[DOGA: Thinking Process]` panel before the final response
+- **Auto Depth**  Automatic complexity assessment per query — decides low/medium/high using pure Python string analysis (0 LLM tokens)
 - **Configurable Depth**  5 levels (1 = lightweight goal check, 5 = full probabilistic reasoning with simulation tool guidance)
 - **Memory Integration (optional)**  Remembers goal patterns across sessions via Mnemosyne (`pip install doga-hermes[memory]`)
 
@@ -60,7 +61,9 @@ doga:
 | `/doga on` | Enable DOGA |
 | `/doga off` | Disable DOGA |
 | `/doga status` | Show current settings |
-| `/doga depth <1-5>` | Set thinking depth |
+| `/doga auto` | Automatic depth — decides low/medium/high per query (default) |
+| `/doga manual low\|medium\|high` | Force a specific thinking level |
+| `/doga depth <1-5>` | Set thinking depth (switches to manual mode) |
 | `/doga show` | Show simulation panel |
 | `/doga hide` | Hide simulation panel |
 | `/doga memory on` | Enable goal memory (requires Mnemosyne) |
@@ -90,7 +93,7 @@ Returns probability distribution, entropy, and uncertainty level.
 ## Roadmap
 
 - **Phase 1 (done)** — Optional Mnemosyne memory for goal pattern persistence
-- **Phase 2** — Automatic depth selection based on query complexity
+- **Phase 2 (done)** — Automatic depth selection based on query complexity
 - **Phase 3** — Recursive reasoning with nested scenario simulation
 
 ---
