@@ -17,6 +17,7 @@ DOGA (Doğa Turkish for "nature") adds scenario simulation, Monte Carlo reasonin
 - **Auto Depth**  Automatic complexity assessment per query — decides low/medium/high using pure Python string analysis (0 LLM tokens)
 - **Configurable Depth**  5 levels (1 = lightweight goal check, 5 = full probabilistic reasoning with simulation tool guidance)
 - **Memory Integration (optional)**  Remembers goal patterns across sessions via Mnemosyne (`pip install doga-hermes[memory]`)
+- **De Bono Thinking Hats**  Structured parallel reasoning through Six Thinking Hats lens — depth-aware (White, Black, Yellow, Green, Red), optional, enabled by default
 
 ---
 
@@ -64,6 +65,8 @@ doga:
 | `/doga auto` | Automatic depth — decides low/medium/high per query (default) |
 | `/doga manual low\|medium\|high` | Force a specific thinking level |
 | `/doga depth <1-5>` | Set thinking depth (switches to manual mode) |
+| `/doga hats on` | Enable De Bono parallel thinking hats (default) |
+| `/doga hats off` | Disable De Bono hats (reverts to standard goal/scenario prompts) |
 | `/doga show` | Show simulation panel |
 | `/doga hide` | Hide simulation panel |
 | `/doga memory on` | Enable goal memory (requires Mnemosyne) |
@@ -94,6 +97,7 @@ Returns probability distribution, entropy, and uncertainty level.
 
 - **Phase 1 (done)** — Optional Mnemosyne memory for goal pattern persistence
 - **Phase 2 (done)** — Automatic depth selection based on query complexity
+- **De Bono Hats (done)** — Six Thinking Hats structured reasoning, optional, depth-aware
 - **Phase 3** — Recursive reasoning with nested scenario simulation
 
 ---
