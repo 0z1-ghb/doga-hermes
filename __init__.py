@@ -11,6 +11,7 @@ import json
 import logging
 from typing import Any, Dict, Optional
 
+from . import depth_selector
 from . import simulation_engine
 from . import thinking_prompt
 from . import output_formatter
@@ -33,15 +34,19 @@ class _PluginState:
 
     def __init__(self):
         self.enabled: bool = True
-        self.depth: int = 3          # 1-5
+        self.auto_depth: bool = True
+        self.depth: int = 3
         self.show_simulation: bool = True
         self.max_scenarios: int = 5
         self.memory_enabled: bool = True
         self._current_user_message: str = ""
+        self._last_complexity: str = "medium"
 
     def to_dict(self) -> dict:
+        mode = f"auto (complexity: {self._last_complexity})" if self.auto_depth else f"manual (depth: {self.depth})"
         return {
             "enabled": self.enabled,
+            "mode": mode,
             "depth": self.depth,
             "show_simulation": self.show_simulation,
             "max_scenarios": self.max_scenarios,
@@ -70,6 +75,10 @@ def _on_pre_llm_call(
         return None
 
     _state._current_user_message = user_message
+
+    if _state.auto_depth and user_message:
+        _state._last_complexity = depth_selector.assess_complexity(user_message)
+        _state.depth = depth_selector.complexity_to_depth(_state._last_complexity)
 
     past_patterns = None
     if MNEMOSYNE_AVAILABLE and _state.memory_enabled and user_message:
@@ -243,14 +252,15 @@ _DOGA_HELP = """\
 /doga — probabilistic DOGA thinking controller
 
 Subcommands:
-  on              Enable DOGA thinking (default)
-  off             Disable DOGA thinking
-  status          Show current settings
-  depth <1-5>     Set thinking depth (1=lightweight, 5=full simulation)
-  show            Show simulation panel in responses
-  hide            Hide simulation panel (only final answer)
-  memory on       Enable Mnemosyne goal memory (requires pip install mnemosyne-memory)
-  memory off      Disable Mnemosyne goal memory
+  on                   Enable DOGA thinking (default)
+  off                  Disable DOGA thinking
+  status               Show current settings
+  auto                 Automatic depth (default — decides low/medium/high per query)
+  manual low|medium|high  Force a specific thinking level
+  show                 Show simulation panel in responses
+  hide                 Hide simulation panel (only final answer)
+  memory on            Enable Mnemosyne goal memory (requires pip install mnemosyne-memory)
+  memory off           Disable Mnemosyne goal memory
 
 Current state: {state}
 """
@@ -274,14 +284,33 @@ def _handle_doga(raw_args: str) -> Optional[str]:
 
     if sub == "status":
         mem_status = "available" if MNEMOSYNE_AVAILABLE else "not installed"
+        if _state.auto_depth:
+            mode = f"auto (complexity: {_state._last_complexity})"
+        else:
+            mode = f"manual (depth: {_state.depth}/5)"
         return (
             "DOGA status:\n"
             f"  Enabled: {_state.enabled}\n"
-            f"  Depth: {_state.depth}/5\n"
+            f"  Mode: {mode}\n"
             f"  Show simulation: {_state.show_simulation}\n"
             f"  Max scenarios: {_state.max_scenarios}\n"
             f"  Memory: {_state.memory_enabled} ({mem_status})"
         )
+
+    if sub == "auto":
+        _state.auto_depth = True
+        return f"DOGA set to auto mode (complexity: {_state._last_complexity})."
+
+    if sub == "manual":
+        if len(argv) < 2:
+            return "Usage: /doga manual low|medium|high"
+        level = argv[1].lower()
+        mapping = {"low": 1, "medium": 3, "high": 5}
+        if level not in mapping:
+            return "Level must be low, medium, or high."
+        _state.auto_depth = False
+        _state.depth = mapping[level]
+        return f"DOGA set to manual {level} (depth: {_state.depth}/5)."
 
     if sub == "depth":
         if len(argv) < 2:
@@ -290,8 +319,9 @@ def _handle_doga(raw_args: str) -> Optional[str]:
             d = int(argv[1])
             if d < 1 or d > 5:
                 return "Depth must be between 1 and 5."
+            _state.auto_depth = False
             _state.depth = d
-            return f"DOGA depth set to {d}/5."
+            return f"DOGA depth set to {d}/5 (manual mode)."
         except ValueError:
             return "Invalid number. Use /doga depth <1-5>."
 
@@ -342,5 +372,5 @@ def register(ctx) -> None:
         "doga",
         handler=_handle_doga,
         description="Control DOGA probabilistic thinking.",
-        args_hint="on|off|status|depth <1-5>|show|hide|memory on|off",
+        args_hint="on|off|status|auto|manual low|medium|high|depth <1-5>|show|hide|memory on|off",
     )
