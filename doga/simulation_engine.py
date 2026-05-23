@@ -42,7 +42,7 @@ class _ConditionCache:
         allowed_types = {
             ast.Expression, ast.BoolOp, ast.And, ast.Or,
             ast.UnaryOp, ast.Not,
-            ast.Name, ast.Constant,
+            ast.Name, ast.Constant, ast.Load,
             ast.Compare, ast.Eq, ast.NotEq, ast.Gt, ast.GtE, ast.Lt, ast.LtE,
             ast.In, ast.NotIn,
         }
