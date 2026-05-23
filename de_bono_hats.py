@@ -46,4 +46,4 @@ def format_hats_header(hat_keys: list[str]) -> str:
     """Format hat keys for display in the thinking panel header."""
     if not hat_keys:
         return ""
-    return f" — {', '.join(k.capitalize() for k in hat_keys)}"
+    return f" - {', '.join(k.capitalize() for k in hat_keys)}"

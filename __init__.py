@@ -28,6 +28,18 @@ except ImportError:
     MNEMOSYNE_AVAILABLE = False
 
 # ---------------------------------------------------------------------------
+# PHASE 3 RESEARCH NOTE (2026-05-23)
+#
+# Recursive reasoning requires Hermes to support multi-turn internal LLM
+# calls (pre_llm_call invoked multiple times per user message). Current
+# hook-only architecture cannot self-loop. Next step: investigate Hermes'
+# internal chain-of-thought support — does it call pre_llm_call per
+# internal reasoning step? If yes, _PluginState._reasoning_stack can track
+# recursion depth. If no, Phase 3 needs a Hermes core change or a new
+# Hermes API (llm.generate). Either way, "pure plugin" constraint breaks.
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
 # Plugin state
 # ---------------------------------------------------------------------------
 
@@ -124,12 +136,20 @@ def _on_transform_llm_output(
     if not _state.enabled or not response_text:
         return None
 
+    # Strip guide blocks first so goal type detection is accurate
+    cleaned_for_goal = re.sub(
+        r"\[world_model_guide\].*?\[/world_model_guide\]",
+        "",
+        response_text,
+        flags=re.DOTALL,
+    ).strip()
+
     # Save detected goal pattern to Mnemosyne if available
     if MNEMOSYNE_AVAILABLE and _state.memory_enabled and _state._current_user_message:
         try:
             m = re.search(
                 r"<world_model>.*?(Information|Understanding|Action)",
-                response_text,
+                cleaned_for_goal,
                 re.DOTALL | re.IGNORECASE,
             )
             goal_type = m.group(1).lower() if m else "unknown"
