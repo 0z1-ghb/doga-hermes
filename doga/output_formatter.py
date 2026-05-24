@@ -27,7 +27,7 @@ _FALLBACK_WM_RE = re.compile(
 # Regex to find [world_model_guide]...[world_model_guide] blocks
 # Fallback: matches unclosed tags too (token truncation safety)
 _GUIDE_RE = re.compile(
-    r"\[world_model_guide\].*?(?:\[/world_model_guide\]|$)",
+    r"\[world_model_guide\].*?\[/world_model_guide\]",
     re.DOTALL,
 )
 
