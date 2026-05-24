@@ -7,8 +7,9 @@ def test_strip_guide_closed():
 
 
 def test_strip_guide_unclosed():
+    """Unclosed guide tags are preserved to prevent output truncation."""
     text = "before [world_model_guide]guide text after"
-    assert fmt._strip_guide_blocks(text) == "before"
+    assert fmt._strip_guide_blocks(text) == text
 
 
 def test_strip_guide_none():
